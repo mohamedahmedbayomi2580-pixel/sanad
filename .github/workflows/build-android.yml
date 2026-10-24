@@ -32,6 +32,29 @@ jobs:
       - name: Add Android project
         run: npx cap add android
 
+      - name: Notification permissions and 3-second alarm sound
+        run: |
+          python3 - <<'PY'
+          import wave, struct, math, os
+          os.makedirs("android/app/src/main/res/raw", exist_ok=True)
+          r = 22050
+          w = wave.open("android/app/src/main/res/raw/done.wav", "wb")
+          w.setnchannels(1); w.setsampwidth(2); w.setframerate(r)
+          for i in range(r * 3):
+              t = i / r
+              k = int(t / 0.5)
+              on = (t - k * 0.5) < 0.4
+              f = 1175 if k % 2 == 0 else 880
+              v = int(0.6 * 32767 * math.sin(2 * math.pi * f * t)) if on else 0
+              w.writeframes(struct.pack("<h", v))
+          w.close()
+          p = "android/app/src/main/AndroidManifest.xml"
+          m = open(p, encoding="utf-8").read()
+          perms = "".join('    <uses-permission android:name="android.permission.%s" />\n' % x for x in ["POST_NOTIFICATIONS", "SCHEDULE_EXACT_ALARM", "USE_EXACT_ALARM", "RECEIVE_BOOT_COMPLETED", "VIBRATE", "WAKE_LOCK"])
+          m = m.replace("<application", perms + "    <application", 1)
+          open(p, "w", encoding="utf-8").write(m)
+          PY
+
       - name: Apply my icon as the app launcher icon
         run: |
           pip install pillow

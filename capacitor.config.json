@@ -1,0 +1,6 @@
+{
+  "appId": "com.sanad.app",
+  "appName": "سند",
+  "webDir": "www",
+  "server": { "androidScheme": "https" }
+}

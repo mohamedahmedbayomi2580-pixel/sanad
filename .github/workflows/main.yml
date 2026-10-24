@@ -1,10 +1,12 @@
-name: Generate Icons
+name: Build Android
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  icons:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,8 +15,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Check source image
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check files
         run: |
+          test -f www/index.html || (echo "www/index.html not found" && exit 1)
           test -f assets/icon-only.png || (echo "assets/icon-only.png not found" && exit 1)
           file assets/icon-only.png
 
@@ -24,11 +32,23 @@ jobs:
       - name: Add Android project
         run: npx cap add android
 
-      - name: Generate icons
+      - name: Generate app icon (launcher icon)
         run: npx capacitor-assets generate --android --iconBackgroundColor "#ffffff"
 
-      - name: Upload icons
+      - name: Verify icon was created
+        run: ls android/app/src/main/res/mipmap-xxxhdpi
+
+      - name: Sync
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sanad-Icons
-          path: android/app/src/main/res/mipmap-*
+          name: Sanad-Android
+          path: android/app/build/outputs/apk/debug/*.apk

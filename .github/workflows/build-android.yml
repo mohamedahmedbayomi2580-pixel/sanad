@@ -1,0 +1,74 @@
+name: Build Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check files
+        run: |
+          test -f www/index.html || (echo "www/index.html not found" && exit 1)
+          test -f assets/icon-only.png || (echo "assets/icon-only.png not found" && exit 1)
+          file assets/icon-only.png
+
+      - name: Install
+        run: npm install
+
+      - name: Add Android project
+        run: npx cap add android
+
+      - name: Apply my icon as the app launcher icon
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageOps, ImageDraw
+          import os, glob, shutil
+          res = "android/app/src/main/res"
+          src = Image.open("assets/icon-only.png").convert("RGBA")
+          print("icon size:", src.size)
+          # remove the default adaptive icon and every default launcher icon
+          shutil.rmtree(res + "/mipmap-anydpi-v26", ignore_errors=True)
+          for f in glob.glob(res + "/mipmap-*/ic_launcher*"):
+              os.remove(f)
+          for d, s in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
+              p = f"{res}/mipmap-{d}"
+              os.makedirs(p, exist_ok=True)
+              im = ImageOps.fit(src, (s, s), Image.LANCZOS)
+              im.save(f"{p}/ic_launcher.png")
+              mask = Image.new("L", (s, s), 0)
+              ImageDraw.Draw(mask).ellipse((0, 0, s - 1, s - 1), fill=255)
+              rd = im.copy()
+              rd.putalpha(mask)
+              rd.save(f"{p}/ic_launcher_round.png")
+          PY
+          ls -R android/app/src/main/res | grep ic_launcher
+
+      - name: Sync
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sanad-Android
+          path: android/app/build/outputs/apk/debug/*.apk
